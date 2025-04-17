@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { supabase } from '../../lib/supabase';
 import { getAuthUrl } from '../../lib/google-calendar';
 import { Loader2, Save, Plus, Trash2, Calendar, Upload, Image as ImageIcon } from 'lucide-react';
 import { BackButton } from '../../components/BackButton';
+import { auth } from '../../lib/firebase';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -45,6 +45,34 @@ const defaultWorkingHours = {
 
 type EstablishmentFormData = z.infer<typeof establishmentSchema>;
 
+type BarberService = {
+  id: string;
+  barber_id: string;
+  name: string;
+  price: number;
+  duration: number;
+  description: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+interface BarberEmployee {
+  id?: string;
+  name: string;
+  email: string;
+  phone: string;
+  photo?: string;
+}
+
+interface BarberProfile {
+  id: string;
+  auth_uid: string;
+  name: string;
+  phone: string;
+  bio?: string;
+  email: string;
+}
+
 export function EstablishmentForm() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -56,6 +84,29 @@ export function EstablishmentForm() {
   const [uploadingProfile, setUploadingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [establishmentId, setEstablishmentId] = useState<string | null>(null);
+  const [barberId, setBarberId] = useState<string | null>(null);
+
+  const [services, setServices] = useState<BarberService[]>([]);
+  const [serviceForm, setServiceForm] = useState<{
+    id: string | null;
+    name: string;
+    price: string;
+    duration: string;
+    description: string;
+  }>({ id: null, name: '', price: '', duration: '', description: '' });
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [serviceLoading, setServiceLoading] = useState(false);
+  const [serviceError, setServiceError] = useState('');
+  const [serviceSuccess, setServiceSuccess] = useState('');
+  const [showServiceForm, setShowServiceForm] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<BarberService | null>(null);
+
+  const [barbers, setBarbers] = useState<BarberEmployee[]>([]);
+  const [barberForm, setBarberForm] = useState<{ name: string; email: string; phone: string; photo: File | null }>({ name: '', email: '', phone: '', photo: null });
+  const [barberLoading, setBarberLoading] = useState(false);
+  const [barberError, setBarberError] = useState<string | null>(null);
+  const [barberSuccess, setBarberSuccess] = useState<string | null>(null);
+  const [editingBarberId, setEditingBarberId] = useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<EstablishmentFormData>({
     resolver: zodResolver(establishmentSchema),
@@ -69,26 +120,37 @@ export function EstablishmentForm() {
     checkGoogleCalendarConnection();
   }, []);
 
+  useEffect(() => {
+    if (establishmentId) fetchServices();
+    if (!loading) fetchBarbers();
+    // eslint-disable-next-line
+  }, [establishmentId, loading, barberId, establishmentId]);
+
   async function loadProfile() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) return;
 
       // Primeiro, buscar os detalhes do estabelecimento
-      const { data: establishmentData, error: establishmentError } = await supabase
-        .from('establishment_details')
-        .select('*')
-        .eq('barber_id', user.id);
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3001/api/establishment_details', {
+        method: 'GET',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json'
+        }
+      });
+      const establishmentData = await response.json();
 
-      if (establishmentError) {
-        console.error('Error loading establishment:', establishmentError);
+      if (establishmentData.error) {
+        console.error('Error loading establishment:', establishmentData.error);
         setError('Erro ao carregar dados do estabelecimento');
         return;
       }
 
-      // Se encontrou um estabelecimento existente
-      if (establishmentData && establishmentData.length > 0) {
-        const establishment = establishmentData[0];
+      // Agora trata como objeto
+      if (establishmentData && !establishmentData.error) {
+        const establishment = establishmentData;
         setEstablishmentId(establishment.id);
         setValue('name', establishment.name);
         setValue('phone', establishment.phone);
@@ -101,27 +163,15 @@ export function EstablishmentForm() {
         setValue('state', establishment.address_details.state || '');
         setValue('zipcode', establishment.address_details.zipcode || '');
         setValue('workingHours', establishment.working_hours || defaultWorkingHours);
-
-        // Buscar imagens do estabelecimento
-        const { data: imagesData } = await supabase
-          .from('establishment_images')
-          .select('*')
-          .eq('establishment_id', establishment.id);
-
-        if (imagesData) {
-          const bannerImg = imagesData.find(img => img.type === 'banner');
-          const profileImg = imagesData.find(img => img.type === 'profile');
-          
-          if (bannerImg) setBannerImage(bannerImg.url);
-          if (profileImg) setProfileImage(profileImg.url);
-        }
+        setBannerImage(establishment.banner_url || null);
+        setProfileImage(establishment.profile_url || null);
       } else {
         // Se não encontrou estabelecimento, carregar dados do perfil antigo
-        const { data: profile } = await supabase
-          .from('barber_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
+        const profileResponse = await fetch('http://localhost:3001/api/barber_profiles', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const profile = await profileResponse.json();
 
         if (profile) {
           setValue('name', profile.name);
@@ -149,16 +199,16 @@ export function EstablishmentForm() {
 
   async function checkGoogleCalendarConnection() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) return;
 
-      const { data, error } = await supabase
-        .from('barber_profiles')
-        .select('google_calendar_connected')
-        .eq('id', user.id)
-        .single();
+      const response = await fetch('http://localhost:3001/api/barber_profiles', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
 
-      if (error) throw error;
+      if (data.error) throw data.error;
       setIsGoogleCalendarConnected(data?.google_calendar_connected || false);
     } catch (error) {
       console.error('Error checking Google Calendar connection:', error);
@@ -188,7 +238,7 @@ export function EstablishmentForm() {
       return null;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = auth.currentUser;
     if (!user || !establishmentId) return null;
 
     const fileExt = file.name.split('.').pop();
@@ -198,30 +248,24 @@ export function EstablishmentForm() {
     try {
       type === 'banner' ? setUploadingBanner(true) : setUploadingProfile(true);
 
-      const { error: uploadError } = await supabase.storage
-        .from('barber-images')
-        .upload(filePath, file);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', type);
+      formData.append('establishment_id', establishmentId);
 
-      if (uploadError) throw uploadError;
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3001/api/upload_image', {
+        method: 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: formData
+      });
+      const data = await response.json();
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('barber-images')
-        .getPublicUrl(filePath);
+      if (data.error) throw data.error;
 
-      // Save image reference in establishment_images table
-      const { error: imageError } = await supabase
-        .from('establishment_images')
-        .upsert({
-          establishment_id: establishmentId,
-          type,
-          url: publicUrl
-        }, {
-          onConflict: 'establishment_id,type'
-        });
-
-      if (imageError) throw imageError;
-
-      return publicUrl;
+      return data.url;
     } catch (error) {
       console.error(`Error uploading ${type} image:`, error);
       setError(`Erro ao fazer upload da imagem de ${type === 'banner' ? 'capa' : 'perfil'}`);
@@ -232,75 +276,261 @@ export function EstablishmentForm() {
   }
 
   async function onSubmit(data: EstablishmentFormData) {
+    setSaving(true);
+    setError(null);
     try {
-      console.log('Starting form submission...', { formData: data });
-      setSaving(true);
-      setError(null);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('No authenticated user found');
-        setError('Usuário não autenticado');
-        return;
-      }
-
-      const addressDetails = {
-        street: data.street,
-        number: data.number,
-        complement: data.complement || '',
-        neighborhood: data.neighborhood,
-        city: data.city,
-        state: data.state,
-        zipcode: data.zipcode
-      };
-
-      const establishmentData = {
-        barber_id: user.id,
-        name: data.name,
-        phone: data.phone,
-        bio: data.bio || '',
-        address_details: addressDetails,
-        working_hours: data.workingHours
-      };
-
-      let result;
-      if (establishmentId) {
-        // Atualizar estabelecimento existente
-        console.log('Updating existing establishment...', { id: establishmentId });
-        result = await supabase
-          .from('establishment_details')
-          .update(establishmentData)
-          .eq('id', establishmentId)
-          .select()
-          .single();
-      } else {
-        // Criar novo estabelecimento
-        console.log('Creating new establishment...');
-        result = await supabase
-          .from('establishment_details')
-          .insert(establishmentData)
-          .select()
-          .single();
-      }
-
-      if (result.error) {
-        console.error('Error saving establishment:', result.error);
-        throw result.error;
-      }
-
-      if (result.data) {
-        setEstablishmentId(result.data.id);
-      }
-
-      console.log('Establishment saved successfully');
+      const user = auth.currentUser;
+      if (!user) throw new Error('Usuário não autenticado');
+      // Substituir insert/update do Supabase por chamada ao backend Express
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3001/api/establishment_details', {
+        method: establishmentId ? 'PUT' : 'POST',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...data,
+          banner_url: bannerImage,
+          profile_url: profileImage,
+          user_id: user.uid,
+          id: establishmentId
+        })
+      });
+      if (!response.ok) throw new Error('Erro ao salvar estabelecimento');
       alert('Estabelecimento salvo com sucesso!');
-    } catch (error: any) {
-      console.error('Error saving establishment:', error);
-      setError(error.message || 'Erro ao salvar estabelecimento');
+      navigate('/barber/profile');
+    } catch (error) {
+      setError('Erro ao salvar estabelecimento');
     } finally {
-      console.log('Form submission completed');
       setSaving(false);
     }
+  }
+
+  async function fetchServices() {
+    setServiceLoading(true);
+    setServiceError('');
+    setServiceSuccess('');
+    try {
+      // Buscar barber_id do usuário autenticado
+      const token = localStorage.getItem('token');
+      // Primeiro, buscar barber_id
+      const profileRes = await fetch('http://localhost:3001/api/establishment_details', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const profile = await profileRes.json();
+      if (!profile.barber_id) throw new Error('Barber_id não encontrado');
+      setBarberId(profile.barber_id);
+      const res = await fetch(`http://localhost:3001/api/barber_services/${profile.barber_id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setServices(data.services || []);
+    } catch (e) {
+      setServiceError('Erro ao carregar serviços');
+    } finally {
+      setServiceLoading(false);
+    }
+  }
+
+  async function handleSaveService() {
+    setServiceLoading(true);
+    setServiceError('');
+    setServiceSuccess('');
+    try {
+      const token = localStorage.getItem('token');
+      // Buscar barber_id do usuário autenticado
+      let barber_id = serviceForm.id ? serviceForm.barber_id : undefined;
+      if (!barber_id) {
+        const profileRes = await fetch('http://localhost:3001/api/establishment_details', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const profile = await profileRes.json();
+        barber_id = profile.barber_id;
+      }
+      const method = serviceForm.id ? 'PUT' : 'POST';
+      const url = serviceForm.id
+        ? `http://localhost:3001/api/barber_services/${serviceForm.id}`
+        : `http://localhost:3001/api/barber_services`;
+      const body = {
+        name: serviceForm.name,
+        price: parseInt(serviceForm.price),
+        duration: parseInt(serviceForm.duration),
+        description: serviceForm.description,
+        barber_id
+      };
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error('Erro ao salvar serviço');
+      setServiceSuccess(serviceForm.id ? 'Serviço atualizado com sucesso!' : 'Serviço adicionado com sucesso!');
+      resetServiceForm();
+      fetchServices();
+    } catch (e) {
+      setServiceError('Erro ao salvar serviço');
+    } finally {
+      setServiceLoading(false);
+      setTimeout(() => setServiceSuccess(''), 2000);
+    }
+  }
+
+  function resetServiceForm() {
+    setServiceForm({ id: null, name: '', price: '', duration: '', description: '' });
+    setEditingServiceId(null);
+    setShowServiceForm(false);
+  }
+
+  function handleEditService(service: BarberService) {
+    setServiceForm({
+      id: service.id,
+      name: service.name,
+      price: service.price.toString(),
+      duration: service.duration?.toString() || '',
+      description: service.description,
+      barber_id: service.barber_id
+    });
+    setEditingServiceId(service.id);
+    setShowServiceForm(true);
+  }
+
+  function handleAddService() {
+    resetServiceForm();
+    setShowServiceForm(true);
+  }
+
+  async function handleDeleteServiceConfirm() {
+    if (!serviceToDelete) return;
+    setServiceLoading(true);
+    setServiceError('');
+    setServiceSuccess('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:3001/api/barber_services/${serviceToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Erro ao remover serviço');
+      setServiceSuccess('Serviço removido com sucesso!');
+      setServiceToDelete(null);
+      fetchServices();
+    } catch (e) {
+      setServiceError('Erro ao remover serviço');
+    } finally {
+      setServiceLoading(false);
+      setTimeout(() => setServiceSuccess(''), 2000);
+    }
+  }
+
+  function handleServiceFormChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const { name, value } = e.target;
+    setServiceForm((prev) => ({ ...prev, [name]: value }));
+  }
+  function handleCancelEditService() {
+    resetServiceForm();
+  }
+
+  async function fetchBarbers() {
+    setBarberLoading(true);
+    setBarberError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:3001/api/barber_employees', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (data.warning === 'BARBEIROS NÃO CADASTRADOS') {
+        setBarbers([]);
+        setBarberError('BARBEIROS NÃO CADASTRADOS');
+        return;
+      }
+      if (Array.isArray(data)) {
+        setBarbers(data); // Mostra todos os funcionários cadastrados
+        setBarberError(null);
+      } else {
+        setBarbers([]);
+        setBarberError('Erro ao carregar funcionários');
+      }
+    } catch (err) {
+      setBarberError('Erro ao carregar funcionários');
+    } finally {
+      setBarberLoading(false);
+    }
+  }
+
+  async function handleAddBarber(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    setBarberLoading(true);
+    setBarberError(null);
+    setBarberSuccess(null);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('name', barberForm.name);
+      formData.append('email', barberForm.email);
+      formData.append('phone', barberForm.phone);
+      if (barberForm.photo) {
+        formData.append('photo', barberForm.photo);
+      }
+      const response = await fetch('http://localhost:3001/api/barber_employees', {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined, // NÃO definir Content-Type!
+        body: formData,
+      });
+      if (!response.ok) throw new Error('Erro ao cadastrar funcionário barbeiro');
+      setBarberSuccess('Funcionário cadastrado com sucesso!');
+      setBarberForm({ name: '', email: '', phone: '', photo: null });
+      fetchBarbers();
+    } catch (err) {
+      setBarberError('Erro ao cadastrar funcionário');
+    } finally {
+      setBarberLoading(false);
+    }
+  }
+
+  function handleEditBarber(barber: BarberEmployee) {
+    setBarberForm({
+      name: barber.name,
+      email: barber.email,
+      phone: barber.phone,
+      photo: null
+    });
+    setEditingBarberId(barber.id);
+  }
+
+  async function handleDeleteBarber(barber: BarberEmployee) {
+    if (!window.confirm(`Deseja realmente excluir o barbeiro ${barber.name}?`)) return;
+    setBarberLoading(true);
+    setBarberError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:3001/api/barber_profiles/${barber.id}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (response.status === 404) {
+        setBarberError('Barbeiro já foi removido ou não encontrado.');
+        fetchBarbers();
+        return;
+      }
+      if (!response.ok) throw new Error('Erro ao excluir barbeiro');
+      setBarberSuccess('Barbeiro excluído com sucesso!');
+      fetchBarbers();
+    } catch (err) {
+      setBarberError('Erro ao excluir barbeiro');
+    } finally {
+      setBarberLoading(false);
+      setTimeout(() => setBarberSuccess(null), 2000);
+    }
+  }
+
+  function handleCancelEditBarber() {
+    setEditingBarberId(null);
+    setBarberForm({ name: '', email: '', phone: '', photo: null });
   }
 
   if (loading) {
@@ -349,7 +579,7 @@ export function EstablishmentForm() {
               {bannerImage ? (
                 <div className="w-full relative">
                   <img
-                    src={bannerImage}
+                    src={bannerImage ? `http://localhost:3001${bannerImage}` : undefined}
                     alt="Banner"
                     className="w-full h-48 object-cover rounded-lg"
                   />
@@ -399,7 +629,7 @@ export function EstablishmentForm() {
               {profileImage ? (
                 <div className="relative">
                   <img
-                    src={profileImage}
+                    src={profileImage ? `http://localhost:3001${profileImage}` : undefined}
                     alt="Profile"
                     className="w-32 h-32 object-cover rounded-full"
                   />
@@ -599,6 +829,194 @@ export function EstablishmentForm() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="mt-10">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Serviços Oferecidos</h3>
+              {serviceLoading && <p>Carregando...</p>}
+              {serviceError && <p className="text-red-600">{serviceError}</p>}
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-700 text-sm">Cadastre os serviços oferecidos, valores e descrições. Isso será exibido para seus clientes!</span>
+                <button type="button" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded flex items-center" onClick={handleAddService} disabled={serviceLoading}>
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                  Novo Serviço
+                </button>
+              </div>
+              <div className="overflow-x-auto rounded shadow">
+                <table className="min-w-full mb-2 divide-y divide-gray-200">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="text-left px-3 py-2">Nome</th>
+                      <th className="text-left px-3 py-2">Descrição</th>
+                      <th className="text-left px-3 py-2">Preço</th>
+                      <th className="text-left px-3 py-2">Duração</th>
+                      <th className="px-3 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {services.length === 0 && !serviceLoading && (
+                      <tr><td colSpan={5} className="text-center text-gray-400 py-4">Nenhum serviço cadastrado</td></tr>
+                    )}
+                    {services.map((service, idx) => (
+                      <tr key={service.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-3 py-2">{service.name}</td>
+                        <td className="px-3 py-2">{service.description}</td>
+                        <td className="px-3 py-2">R$ {Number(service.price).toFixed(2)}</td>
+                        <td className="px-3 py-2">{service.duration} min</td>
+                        <td className="px-3 py-2 flex gap-2">
+                          <button type="button" className="text-blue-600 hover:underline flex items-center" onClick={() => handleEditService(service)}>Editar</button>
+                          <button type="button" className="text-red-600 hover:underline flex items-center" onClick={() => setServiceToDelete(service)}>Remover</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {serviceLoading && <div className="text-center py-4"><svg className="animate-spin h-6 w-6 text-gray-500 mx-auto" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg></div>}
+              </div>
+              {showServiceForm && (
+                <div className="bg-white rounded shadow-lg p-4 mt-4 max-w-md mx-auto">
+                  <div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nome do serviço *</label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={serviceForm.name}
+                        onChange={handleServiceFormChange}
+                        placeholder="Ex: Corte Masculino"
+                        required
+                        className="border rounded px-2 py-1 w-full"
+                        disabled={serviceLoading}
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                      <input
+                        type="text"
+                        name="description"
+                        value={serviceForm.description}
+                        onChange={handleServiceFormChange}
+                        placeholder="Ex: Corte, lavagem, finalização..."
+                        className="border rounded px-2 py-1 w-full"
+                        disabled={serviceLoading}
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Preço (R$) *</label>
+                      <input
+                        type="number"
+                        name="price"
+                        value={serviceForm.price}
+                        onChange={handleServiceFormChange}
+                        placeholder="Ex: 50.00"
+                        min="0"
+                        step="1"
+                        required
+                        className="border rounded px-2 py-1 w-full"
+                        disabled={serviceLoading}
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Duração (min) *</label>
+                      <input
+                        type="number"
+                        name="duration"
+                        value={serviceForm.duration}
+                        onChange={handleServiceFormChange}
+                        placeholder="Ex: 30"
+                        min="1"
+                        step="1"
+                        required
+                        className="border rounded px-2 py-1 w-full"
+                        disabled={serviceLoading}
+                      />
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <button type="button" className="bg-gray-900 text-white rounded px-4 py-1" disabled={serviceLoading}
+                        onClick={handleSaveService}
+                      >
+                        {editingServiceId ? 'Salvar' : 'Adicionar'}
+                      </button>
+                      <button type="button" onClick={handleCancelEditService} className="text-gray-600 px-4 py-1 border rounded" disabled={serviceLoading}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {serviceToDelete && (
+                <div className="fixed inset-0 z-50 bg-black bg-opacity-30 flex items-center justify-center">
+                  <div className="bg-white rounded shadow-lg p-6 w-full max-w-sm">
+                    <h4 className="text-lg font-semibold mb-3">Remover serviço</h4>
+                    <p className="mb-4">Deseja realmente remover o serviço <span className="font-bold">{serviceToDelete.name}</span>?</p>
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" className="px-3 py-1 rounded border" onClick={() => setServiceToDelete(null)} disabled={serviceLoading}>Cancelar</button>
+                      <button type="button" className="bg-red-600 text-white px-3 py-1 rounded" onClick={handleDeleteServiceConfirm} disabled={serviceLoading}>
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Barbeiros do Estabelecimento</h3>
+              {barberSuccess && <div className="mb-2 p-2 bg-green-100 text-green-700 rounded">{barberSuccess}</div>}
+              {barberError && <div className="mb-2 p-2 bg-red-100 text-red-700 rounded">{barberError}</div>}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <input type="text" placeholder="Nome" value={barberForm.name} onChange={e => setBarberForm(f => ({ ...f, name: e.target.value }))} required className="border rounded px-2 py-1" disabled={barberLoading} />
+                <input type="email" placeholder="E-mail" value={barberForm.email} onChange={e => setBarberForm(f => ({ ...f, email: e.target.value }))} required className="border rounded px-2 py-1" disabled={barberLoading} />
+                <input type="tel" placeholder="Telefone" value={barberForm.phone} onChange={e => setBarberForm(f => ({ ...f, phone: e.target.value }))} required className="border rounded px-2 py-1" disabled={barberLoading} />
+                <input type="file" accept="image/*" onChange={e => setBarberForm(f => ({ ...f, photo: e.target.files?.[0] || null }))} className="border rounded px-2 py-1" disabled={barberLoading} />
+                <button type="button" onClick={handleAddBarber} disabled={barberLoading} className="bg-gray-900 text-white rounded px-4 py-1 hover:bg-gray-800 disabled:opacity-50">
+                  {barberLoading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : <Plus className="h-4 w-4 inline mr-1" />} Cadastrar
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr>
+                      <th>Nome</th>
+                      <th>E-mail</th>
+                      <th>Telefone</th>
+                      <th>Foto</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {barbers.length === 0 && (
+                      <tr><td colSpan={5} className="px-4 py-2 text-gray-400">Nenhum barbeiro cadastrado.</td></tr>
+                    )}
+                    {barbers.map((barber) => (
+                      <tr key={barber.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2">{barber.name}</td>
+                        <td className="px-4 py-2">{barber.email}</td>
+                        <td className="px-4 py-2">{barber.phone}</td>
+                        <td className="px-4 py-2">{barber.photo ? <img src={barber.photo.startsWith('/uploads/') ? barber.photo : `/uploads/${barber.photo}`} alt="Foto" style={{ width: 40, height: 40, borderRadius: '50%' }} /> : '-'}</td>
+                        <td className="px-4 py-2 flex gap-2">
+                          <button
+                            className="text-blue-600 hover:underline flex items-center"
+                            type="button"
+                            onClick={() => handleEditBarber(barber)}
+                          >
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13h3l8-8a2.828 2.828 0 00-4-4l-8 8v3z" /></svg>
+                            Editar
+                          </button>
+                          <button
+                            className="text-red-600 hover:underline flex items-center"
+                            type="button"
+                            onClick={() => handleDeleteBarber(barber)}
+                          >
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                            Excluir
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 

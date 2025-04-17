@@ -4,7 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Lock, Mail, Scissors, User, Phone, MapPin } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { auth } from '../../lib/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -76,12 +77,21 @@ export function AuthForm() {
     try {
       setLoading(true);
       setError(null);
-      const { error } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
+      // 1. Login no Firebase
+      await handleLogin(data.email, data.password);
+      // 2. Obter UID do usuário autenticado
+      const user = auth.currentUser;
+      if (!user) throw new Error('Usuário não autenticado');
+      // 3. Login no backend para obter JWT
+      const loginRes = await fetch('http://localhost:3001/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid, email: user.email })
       });
-
-      if (error) throw error;
+      if (!loginRes.ok) throw new Error('Falha ao autenticar no backend');
+      const loginData = await loginRes.json();
+      // 4. Salvar token JWT no localStorage
+      localStorage.setItem('token', loginData.token);
       navigate('/barber/profile');
     } catch (error: any) {
       console.error('Authentication error:', error);
@@ -95,46 +105,8 @@ export function AuthForm() {
     try {
       setLoading(true);
       setError(null);
-
-      // 1. Create user in Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            name: data.name,
-            role: 'barber'
-          }
-        }
-      });
-      
-      if (authError) {
-        if (authError.message.includes('already registered')) {
-          setError('Este email já está cadastrado');
-          return;
-        }
-        throw authError;
-      }
-      
-      if (!authData.user) {
-        throw new Error('Erro ao criar usuário');
-      }
-
-      // 2. Create barber profile
-      const { error: profileError } = await supabase.from('barber_profiles').insert({
-        id: authData.user.id,
-        name: data.name,
-        phone: data.phone,
-        address: data.address
-      });
-
-      if (profileError) {
-        // If profile creation fails, we should delete the auth user
-        // but Supabase doesn't provide this functionality via the client library
-        throw profileError;
-      }
-
-      alert('Cadastro realizado com sucesso! Verifique seu email para confirmar sua conta.');
+      await handleRegister(data.email, data.password);
+      alert('Cadastro realizado com sucesso!');
       setIsRegistering(false);
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -148,29 +120,36 @@ export function AuthForm() {
     try {
       setLoading(true);
       setError(null);
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-          redirectTo: `${window.location.origin}/barber/profile`
-        }
-      });
-
-      if (error) throw error;
-      
-      // The redirect will happen automatically
-      if (data.url) {
-        window.location.href = data.url;
-      }
+      // Implementar autenticação com Google usando Firebase Auth
     } catch (error: any) {
       console.error('Google authentication error:', error);
       setError('Erro ao fazer login com Google');
     } finally {
       setLoading(false);
     }
+  };
+
+  async function handleLogin(email: string, password: string) {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async function handleRegister(email: string, password: string) {
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Função para logout: remove o token JWT do localStorage e faz signOut do Firebase
+  const handleLogout = async () => {
+    await signOut(auth);
+    localStorage.removeItem('token');
+    navigate('/');
   };
 
   return (
@@ -478,6 +457,15 @@ export function AuthForm() {
                 />
               </svg>
               Google
+            </button>
+          </div>
+          <div className="mt-6 flex justify-center">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm text-gray-600 hover:text-gray-900 border border-gray-300 px-4 py-2 rounded-md"
+            >
+              Sair
             </button>
           </div>
         </div>

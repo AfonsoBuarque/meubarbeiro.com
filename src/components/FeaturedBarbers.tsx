@@ -1,33 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import { Star, ChevronLeft, ChevronRight } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 interface Barber {
   id: string;
-  name: string;
-  address: string;
   rating?: number;
+  banner_url?: string;
+  establishment_name?: string;
+  address_details?: any;
 }
 
 export function FeaturedBarbers() {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadFeaturedBarbers();
   }, []);
 
   async function loadFeaturedBarbers() {
-    const { data } = await supabase
-      .from('barber_profiles')
-      .select('*')
-      .limit(3);
-
-    if (data) {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3001/api/barber_profiles', {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) throw new Error('Erro ao buscar barbeiros');
+      const data = await response.json();
       setBarbers(data);
+    } catch (err) {
+      console.error('Erro ao carregar barbeiros:', err);
+      setError('Não foi possível carregar os barbeiros. Por favor, tente novamente mais tarde.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const nextSlide = () => {
@@ -38,14 +50,41 @@ export function FeaturedBarbers() {
     setCurrentSlide((prev) => (prev === 0 ? barbers.length - 1 : prev - 1));
   };
 
-  // Auto-advance slides every 5 seconds
   useEffect(() => {
     const timer = setInterval(nextSlide, 5000);
     return () => clearInterval(timer);
   }, [barbers.length]);
 
-  if (loading || barbers.length === 0) {
-    return null;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] bg-gray-900">
+        <div className="text-white">Carregando barbeiros...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] bg-gray-900">
+        <div className="text-white text-center">
+          <p>{error}</p>
+          <button
+            onClick={loadFeaturedBarbers}
+            className="mt-4 px-4 py-2 bg-white text-gray-900 rounded-md hover:bg-gray-100"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (barbers.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] bg-gray-900">
+        <div className="text-white">Nenhum barbeiro encontrado.</div>
+      </div>
+    );
   }
 
   return (
@@ -67,15 +106,19 @@ export function FeaturedBarbers() {
               >
                 <div className="bg-white rounded-lg overflow-hidden shadow-xl">
                   <img
-                    src={`https://source.unsplash.com/800x400/?barbershop,haircut&sig=${index}`}
-                    alt={barber.name}
+                    src={barber.banner_url ? `http://localhost:3001${barber.banner_url}` : `https://source.unsplash.com/800x400/?barbershop,haircut&sig=${index}`}
+                    alt={barber.establishment_name || 'Estabelecimento sem nome'}
                     className="w-full h-64 object-cover"
                   />
                   <div className="p-6">
                     <h3 className="text-xl font-bold text-gray-900 mb-2">
-                      {barber.name}
+                      {barber.establishment_name || 'Estabelecimento sem nome'}
                     </h3>
-                    <p className="text-gray-600 mb-4">{barber.address}</p>
+                    <p className="text-gray-600 mb-4">
+                      {barber.address_details ?
+                        `${barber.address_details.street || ''} ${barber.address_details.number || ''}, ${barber.address_details.neighborhood || ''}, ${barber.address_details.city || ''} - ${barber.address_details.state || ''}`.replace(/, ,/g, ',').trim() :
+                        'Endereço não cadastrado'}
+                    </p>
                     <div className="flex items-center">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star

@@ -4,6 +4,7 @@
   1. New Tables
     - `barber_profiles`
       - `id` (uuid, primary key, references auth.users)
+      - `email` (text, required)
       - `name` (text, required)
       - `phone` (text, required)
       - `bio` (text)
@@ -33,6 +34,7 @@
 -- Create barber profiles table
 CREATE TABLE IF NOT EXISTS barber_profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id),
+  email text NOT NULL,
   name text NOT NULL,
   phone text NOT NULL,
   bio text,
@@ -102,11 +104,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create triggers for updated_at
+DROP TRIGGER IF EXISTS set_updated_at ON barber_profiles;
 CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON barber_profiles
   FOR EACH ROW
   EXECUTE FUNCTION handle_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at ON barber_services;
 CREATE TRIGGER set_updated_at
   BEFORE UPDATE ON barber_services
   FOR EACH ROW

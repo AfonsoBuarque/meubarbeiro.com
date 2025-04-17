@@ -8,6 +8,7 @@ import { BarberProfile } from './pages/barber/Profile';
 import { EstablishmentForm } from './pages/barber/EstablishmentForm';
 import { OAuth2Callback } from './pages/OAuth2Callback';
 import { BookingPage } from './pages/public/BookingPage';
+import EstablishmentDetails from './pages/public/EstablishmentDetails';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/buscar" element={<BarberSearch />} />
+        <Route path="/establishment/:id" element={<EstablishmentDetails />} />
         <Route path="/barber/login" element={<AuthForm />} />
         <Route path="/barber/profile" element={<BarberProfile />} />
         <Route path="/barber/establishment" element={<EstablishmentForm />} />

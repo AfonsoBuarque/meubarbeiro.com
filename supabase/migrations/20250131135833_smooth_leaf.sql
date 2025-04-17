@@ -55,53 +55,13 @@ VALUES
   );
 
 -- Inserir perfis de barbeiros
-INSERT INTO barber_profiles (id, name, phone, bio, address, latitude, longitude)
+INSERT INTO barber_profiles (id, email, name, phone, bio, address, latitude, longitude)
 VALUES
-  (
-    '550e8400-e29b-41d4-a716-446655440000',
-    'Barbearia Vintage',
-    '(11) 98765-4321',
-    'Especialistas em cortes clássicos e modernos, com mais de 15 anos de experiência.',
-    'Rua Augusta, 1500 - Jardins, São Paulo - SP',
-    -23.561684,
-    -46.656139
-  ),
-  (
-    '550e8400-e29b-41d4-a716-446655440001',
-    'Barber Shop Kings',
-    '(11) 97654-3210',
-    'O melhor em cortes degradê e desenhos na barba. Ambiente descontraído e cerveja gelada.',
-    'Av. Paulista, 1000 - Bela Vista, São Paulo - SP',
-    -23.564834,
-    -46.652266
-  ),
-  (
-    '550e8400-e29b-41d4-a716-446655440002',
-    'Barbearia Old School',
-    '(11) 96543-2109',
-    'Tradição em cortes masculinos desde 1995. Ambiente familiar e acolhedor.',
-    'Rua Oscar Freire, 750 - Jardins, São Paulo - SP',
-    -23.562714,
-    -46.669787
-  ),
-  (
-    '550e8400-e29b-41d4-a716-446655440003',
-    'Studio Hair Men',
-    '(11) 95432-1098',
-    'Barbearia moderna com profissionais premiados. Especialistas em barbas longas.',
-    'Av. Brigadeiro Faria Lima, 2000 - Itaim Bibi, São Paulo - SP',
-    -23.567253,
-    -46.693753
-  ),
-  (
-    '550e8400-e29b-41d4-a716-446655440004',
-    'Barber Elite',
-    '(11) 94321-0987',
-    'Experiência premium em cuidados masculinos. Tratamentos especiais para barba e cabelo.',
-    'Rua dos Pinheiros, 500 - Pinheiros, São Paulo - SP',
-    -23.566416,
-    -46.678871
-  );
+  ('550e8400-e29b-41d4-a716-446655440000', 'vintage@meubarbeiro.com', 'Barbearia Vintage', '(11) 98765-4321', 'Especialistas em cortes clássicos e modernos, com mais de 15 anos de experiência.', 'Rua Augusta, 1500 - Jardins, São Paulo - SP', -23.561684, -46.656139),
+  ('550e8400-e29b-41d4-a716-446655440001', 'kings@meubarbeiro.com', 'Barber Shop Kings', '(11) 97654-3210', 'O melhor em cortes degradê e desenhos na barba. Ambiente descontraído e cerveja gelada.', 'Av. Paulista, 1000 - Bela Vista, São Paulo - SP', -23.564834, -46.652266),
+  ('550e8400-e29b-41d4-a716-446655440002', 'oldschool@meubarbeiro.com', 'Barbearia Old School', '(11) 96543-2109', 'Tradição e qualidade em um ambiente acolhedor.', 'Rua da Consolação, 900 - Consolação, São Paulo - SP', -23.551234, -46.641234),
+  ('550e8400-e29b-41d4-a716-446655440003', 'studio@meubarbeiro.com', 'Studio Hair Men', '(11) 95432-1098', 'Barbearia moderna com profissionais premiados. Especialistas em barbas longas.', 'Av. Brigadeiro Faria Lima, 2000 - Itaim Bibi, São Paulo - SP', -23.567253, -46.693753),
+  ('550e8400-e29b-41d4-a716-446655440004', 'elite@meubarbeiro.com', 'Barber Elite', '(11) 94321-0987', 'Experiência premium em cuidados masculinos. Tratamentos especiais para barba e cabelo.', 'Rua dos Pinheiros, 500 - Pinheiros, São Paulo - SP', -23.566416, -46.678871);
 
 -- Inserir serviços para cada barbearia
 INSERT INTO barber_services (barber_id, name, price, duration, description)

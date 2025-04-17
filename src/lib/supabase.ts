@@ -1,32 +1,38 @@
+// Este arquivo agora só será usado para acesso ao banco, não para autenticação
+// A autenticação agora é feita via Firebase
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+if (!supabaseUrl) {
+  throw new Error('VITE_SUPABASE_URL não está definida no arquivo .env');
+}
+
+if (!supabaseAnonKey) {
+  throw new Error('VITE_SUPABASE_ANON_KEY não está definida no arquivo .env');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  },
   global: {
     headers: {
-      'X-Client-Info': 'meubarbeiro-web'
+      'X-Client-Info': 'meubarbeiro-web',
     }
+  },
+  db: {
+    schema: 'public'
   }
 });
 
-// Add error handling for connection issues
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_IN') {
-    console.log('User signed in:', session?.user?.email);
-  } else if (event === 'SIGNED_OUT') {
-    console.log('User signed out');
-  } else if (event === 'TOKEN_REFRESHED') {
-    console.log('Token refreshed');
-  }
-});
+// Removido: Eventos de autenticação do Supabase
+
+// Verificar conexão
+supabase
+  .from('barber_profiles')
+  .select('count', { count: 'exact', head: true })
+  .then(() => {
+    console.log('Conexão com Supabase estabelecida com sucesso');
+  })
+  .catch((error) => {
+    console.error('Erro ao conectar com Supabase:', error.message);
+  });

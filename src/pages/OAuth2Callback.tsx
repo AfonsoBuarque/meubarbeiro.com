@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { handleOAuthCallback } from '../lib/google-calendar';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/firebase';
 import { Loader2 } from 'lucide-react';
 
 export function OAuth2Callback() {
@@ -14,31 +14,18 @@ export function OAuth2Callback() {
       try {
         const params = new URLSearchParams(location.search);
         const code = params.get('code');
-        
-        if (!code) {
-          throw new Error('No authorization code received');
-        }
-
+        if (!code) throw new Error('No authorization code received');
         // Get tokens from Google
         const tokens = await handleOAuthCallback(code);
-
-        // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          throw new Error('No authenticated user found');
-        }
-
-        // Store tokens in Supabase
-        const { error: updateError } = await supabase
-          .from('barber_profiles')
-          .update({
-            google_calendar_tokens: tokens,
-            google_calendar_connected: true
-          })
-          .eq('id', user.id);
-
-        if (updateError) throw updateError;
-
+        // Get current Firebase user
+        const user = auth.currentUser;
+        if (!user) throw new Error('No authenticated user found');
+        // Store tokens in Firebase
+        await user.getIdTokenResult(true);
+        const tokenResult = await user.getIdTokenResult();
+        const token = tokenResult.token;
+        const credential = auth.GoogleAuthProvider.credential(token);
+        await auth().signInWithCredential(credential);
         // Redirect back to profile
         navigate('/barber/profile');
       } catch (err) {
@@ -46,7 +33,6 @@ export function OAuth2Callback() {
         setError(err instanceof Error ? err.message : 'Failed to connect Google Calendar');
       }
     };
-
     handleCallback();
   }, [location, navigate]);
 

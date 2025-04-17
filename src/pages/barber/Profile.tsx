@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
 import { Loader2, Save, Settings, MapPin, Phone, Mail, Clock } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { BackButton } from '../../components/BackButton';
+import { auth } from '../../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const profileSchema = z.object({
   name: z.string().min(3, 'Nome deve ter no mínimo 3 caracteres'),
@@ -45,141 +46,97 @@ export function BarberProfile() {
   const [saving, setSaving] = useState(false);
   const [establishment, setEstablishment] = useState<Establishment | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<any>(null);
 
   const { register, handleSubmit, formState: { errors }, setValue } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema)
   });
 
   useEffect(() => {
-    loadProfile();
+    async function fetchProfile() {
+      setLoading(true);
+      setError(null);
+      try {
+        const user = auth.currentUser;
+        if (!user) throw new Error('Usuário não autenticado');
+        // Buscar perfil do barbeiro pelo backend Express
+        const token = localStorage.getItem('token');
+        const response = await fetch(`http://localhost:3001/api/barber_profiles/${user.uid}`, {
+          headers: {
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!response.ok) throw new Error('Erro ao buscar perfil');
+        const data = await response.json();
+        setProfile(data);
+      } catch (error) {
+        setError('Erro ao carregar perfil');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProfile();
   }, []);
 
-  async function loadProfile() {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
+  useEffect(() => {
+    // Firebase Auth: verifica se o usuário está logado
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) {
         navigate('/barber/login');
-        return;
       }
-
-      // First load barber profile
-      const { data: profile } = await supabase
-        .from('barber_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (profile) {
-        setValue('name', profile.name);
-        setValue('phone', profile.phone);
-        setValue('bio', profile.bio || '');
-        setValue('email', user.email || '');
-
-        // Then try to load establishment details
-        const { data: establishmentData, error: establishmentError } = await supabase
-          .from('establishment_details')
-          .select('*')
-          .eq('barber_id', user.id)
-          .maybeSingle();
-
-        if (establishmentError && establishmentError.code !== 'PGRST116') {
-          console.error('Error loading establishment:', establishmentError);
-          setError('Erro ao carregar dados do estabelecimento');
-          return;
-        }
-
-        if (establishmentData) {
-          setEstablishment(establishmentData);
-        } else {
-          // Create new establishment if it doesn't exist
-          const { data: newEstablishment, error: createError } = await supabase
-            .from('establishment_details')
-            .insert({
-              barber_id: user.id,
-              name: profile.name,
-              phone: profile.phone,
-              bio: profile.bio || '',
-              address_details: {
-                street: '',
-                number: '',
-                neighborhood: '',
-                city: '',
-                state: ''
-              },
-              working_hours: {
-                monday: { start: '09:00', end: '18:00', enabled: true },
-                tuesday: { start: '09:00', end: '18:00', enabled: true },
-                wednesday: { start: '09:00', end: '18:00', enabled: true },
-                thursday: { start: '09:00', end: '18:00', enabled: true },
-                friday: { start: '09:00', end: '18:00', enabled: true },
-                saturday: { start: '09:00', end: '13:00', enabled: true },
-                sunday: { start: '09:00', end: '18:00', enabled: false }
-              }
-            })
-            .select()
-            .single();
-
-          if (createError) {
-            console.error('Error creating establishment:', createError);
-            setError('Erro ao criar estabelecimento');
-            return;
-          }
-
-          if (newEstablishment) {
-            setEstablishment(newEstablishment);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      setError('Erro ao carregar perfil');
-    } finally {
-      setLoading(false);
-    }
-  }
+    });
+    return () => unsubscribe();
+  }, []);
 
   async function onSubmit(data: ProfileFormData) {
     try {
       setSaving(true);
       setError(null);
-
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) {
         setError('Usuário não autenticado');
         return;
       }
-
-      // Update barber profile
-      const { error: profileError } = await supabase
-        .from('barber_profiles')
-        .upsert({
-          id: user.id,
+      // Tenta atualizar primeiro
+      const token = localStorage.getItem('token');
+      let response = await fetch(`http://localhost:3001/api/barber_profiles/${user.uid}`, {
+        method: 'PUT',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           name: data.name,
           phone: data.phone,
           bio: data.bio || ''
-        });
-
-      if (profileError) throw profileError;
-
-      // If there's an establishment, update it too
-      if (establishment) {
-        const { error: establishmentError } = await supabase
-          .from('establishment_details')
-          .update({
+        }),
+      });
+      // Se não existir, cria
+      if (response.status === 404) {
+        response = await fetch('http://localhost:3001/api/barber_profiles', {
+          method: 'POST',
+          headers: {
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            auth_uid: user.uid,
             name: data.name,
             phone: data.phone,
-            bio: data.bio || ''
-          })
-          .eq('id', establishment.id);
-
-        if (establishmentError) throw establishmentError;
+            bio: data.bio || '',
+            email: user.email || ''
+          }),
+        });
+        if (!response.ok) throw new Error('Erro ao criar perfil');
+      } else if (!response.ok) {
+        throw new Error('Erro ao atualizar perfil');
       }
-
-      alert('Perfil atualizado com sucesso!');
-      await loadProfile(); // Reload data
+      alert('Perfil salvo com sucesso!');
+      await fetchProfile(); // Reload data
     } catch (error) {
       console.error('Error updating profile:', error);
-      setError('Erro ao atualizar perfil');
+      setError('Erro ao salvar perfil');
     } finally {
       setSaving(false);
     }
@@ -199,7 +156,7 @@ export function BarberProfile() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             <BackButton to="/" />
-            <h1 className="text-3xl font-bold">Perfil do Barbeiro</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Perfil do Barbeiro</h1>
           </div>
           <button
             onClick={() => navigate('/barber/establishment')}
@@ -227,6 +184,7 @@ export function BarberProfile() {
                   <input
                     type="text"
                     {...register('name')}
+                    defaultValue={profile?.name}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
                   />
                   {errors.name && (
@@ -239,11 +197,11 @@ export function BarberProfile() {
                   <input
                     type="email"
                     {...register('email')}
+                    defaultValue={profile?.email}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
-                    disabled
                   />
                   {errors.email && (
-                    <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                    <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>
                   )}
                 </div>
 
@@ -252,6 +210,7 @@ export function BarberProfile() {
                   <input
                     type="text"
                     {...register('phone')}
+                    defaultValue={profile?.phone}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
                   />
                   {errors.phone && (
@@ -263,6 +222,7 @@ export function BarberProfile() {
                   <label className="block text-sm font-medium text-gray-700">Bio</label>
                   <textarea
                     {...register('bio')}
+                    defaultValue={profile?.bio}
                     rows={4}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
                   />

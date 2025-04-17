@@ -1,0 +1,4 @@
+CREATE OR REPLACE FUNCTION auth.uid()
+RETURNS uuid AS $$
+  SELECT NULL::uuid;
+$$ LANGUAGE sql STABLE;

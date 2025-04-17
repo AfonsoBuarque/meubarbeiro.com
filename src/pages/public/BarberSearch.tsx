@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Star, Clock, Scissors, Loader2, Navigation } from 'lucide-react';
 import { BackButton } from '../../components/BackButton';
-import { supabase } from '../../lib/supabase';
 
 interface Barber {
   id: string;
   name: string;
+  establishment_name?: string;
   address_details: {
     street: string;
     number: string;
@@ -17,6 +17,7 @@ interface Barber {
   latitude: number;
   longitude: number;
   banner_url?: string;
+  profile_url?: string;
   distance?: number;
   working_hours: {
     [key: string]: {
@@ -59,65 +60,16 @@ export function BarberSearch() {
   async function loadBarbers() {
     try {
       setLoading(true);
-      
-      let query = supabase
-        .from('establishment_details')
-        .select(`
-          id,
-          name,
-          banner_url,
-          address_details,
-          working_hours,
-          barber_profiles!inner (
-            id,
-            latitude,
-            longitude
-          )
-        `);
-
-      // Add search filter if query exists
-      if (searchQuery) {
-        query = query.or(`
-          name.ilike.%${searchQuery}%,
-          address_details->>'city'.ilike.%${searchQuery}%,
-          address_details->>'neighborhood'.ilike.%${searchQuery}%
-        `);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      if (data) {
-        let barbersWithDistance = data.map(item => ({
-          id: item.id,
-          name: item.name,
-          address_details: item.address_details,
-          working_hours: item.working_hours,
-          banner_url: item.banner_url,
-          latitude: item.barber_profiles.latitude,
-          longitude: item.barber_profiles.longitude,
-          distance: location
-            ? calculateDistance(
-                location.latitude,
-                location.longitude,
-                item.barber_profiles.latitude,
-                item.barber_profiles.longitude
-              )
-            : null
-        }));
-
-        // Sort by distance if location is available
-        if (location) {
-          barbersWithDistance.sort((a, b) => {
-            if (a.distance === null) return 1;
-            if (b.distance === null) return -1;
-            return a.distance - b.distance;
-          });
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3001/api/barber_profiles', {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json'
         }
-
-        setBarbers(barbersWithDistance);
-      }
+      });
+      if (!response.ok) throw new Error('Erro ao buscar barbearias');
+      const data = await response.json();
+      setBarbers(data);
     } catch (error) {
       console.error('Error loading barbers:', error);
     } finally {
@@ -219,57 +171,26 @@ export function BarberSearch() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {barbers.map((barber) => (
-              <div key={barber.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+              <Link to={`/establishment/${barber.id}`} key={barber.id} className="block bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                 <img
-                  src={barber.banner_url || `https://source.unsplash.com/480x360/?barbershop&sig=${barber.id}`}
-                  alt={barber.name}
+                  src={barber.profile_url ? (barber.profile_url.startsWith('/') ? `http://localhost:3001${barber.profile_url}` : barber.profile_url) : `https://source.unsplash.com/480x360/?barber-profile&sig=${barber.id}`}
+                  alt={barber.establishment_name || barber.name}
                   className="w-full h-48 object-cover"
                 />
                 <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="text-lg font-semibold">{barber.name}</h3>
-                      <div className="flex items-center mt-1">
-                        <Star className="h-4 w-4 text-yellow-400 fill-current" />
-                        <span className="ml-1 text-sm text-gray-600">
-                          4.5 (120 avaliações)
-                        </span>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        {barber.establishment_name || barber.name}
+                      </h3>
+                      <div className="flex items-center gap-2 text-gray-500 text-sm mt-1">
+                        <MapPin className="h-4 w-4" />
+                        <span>{barber.address_details.street}, {barber.address_details.number} - {barber.address_details.neighborhood}</span>
                       </div>
                     </div>
-                    {location && barber.distance !== null && (
-                      <span className="text-sm text-gray-600">
-                        {barber.distance < 1
-                          ? `${Math.round(barber.distance * 1000)}m`
-                          : `${barber.distance.toFixed(1)}km`}
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-2 mb-4">
-                    <p className="flex items-center text-sm text-gray-600">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {barber.address_details?.street}, {barber.address_details?.number}
-                      <br />
-                      {barber.address_details?.neighborhood}, {barber.address_details?.city}
-                    </p>
-                    <p className="flex items-center text-sm text-gray-600">
-                      <Clock className="h-4 w-4 mr-2" />
-                      {barber.working_hours?.monday?.enabled ? 'Aberto' : 'Fechado'} hoje
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between text-sm text-gray-600 pt-4 border-t">
-                    <div className="flex items-center">
-                      <Scissors className="h-4 w-4 mr-1" />
-                      <span>Corte a partir de R$ 35</span>
-                    </div>
-                    <Link
-                      to={`/agendar/${barber.id}`}
-                      className="bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-800"
-                    >
-                      Agendar
-                    </Link>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

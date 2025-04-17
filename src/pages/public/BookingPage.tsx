@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
 import { Loader2, Calendar, Clock, DollarSign, ArrowRight } from 'lucide-react';
 import { BackButton } from '../../components/BackButton';
 import { format, addMinutes, setHours, setMinutes, isBefore, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { auth } from '../../lib/firebase';
 
 interface Service {
   id: string;
@@ -61,25 +61,15 @@ export function BookingPage() {
     try {
       setLoading(true);
       setError(null);
-
-      // Load establishment details
-      const { data: establishmentData, error: establishmentError } = await supabase
-        .from('establishment_details')
-        .select('*')
-        .eq('id', establishmentId)
-        .single();
-
-      if (establishmentError) throw establishmentError;
+      // Buscar detalhes do estabelecimento
+      const responseEst = await fetch(`http://localhost:3001/api/establishment_details/${establishmentId}`);
+      if (!responseEst.ok) throw new Error('Erro ao buscar estabelecimento');
+      const establishmentData = await responseEst.json();
       setEstablishment(establishmentData);
-
-      // Load services
-      const { data: servicesData, error: servicesError } = await supabase
-        .from('services')
-        .select('*')
-        .eq('establishment_id', establishmentId)
-        .order('name');
-
-      if (servicesError) throw servicesError;
+      // Buscar serviços
+      const responseServ = await fetch(`http://localhost:3001/api/services/${establishmentId}`);
+      if (!responseServ.ok) throw new Error('Erro ao buscar serviços');
+      const servicesData = await responseServ.json();
       setServices(servicesData);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -93,19 +83,11 @@ export function BookingPage() {
     try {
       const startOfDay = new Date(selectedDate);
       startOfDay.setHours(0, 0, 0, 0);
-      
       const endOfDay = new Date(selectedDate);
       endOfDay.setHours(23, 59, 59, 999);
-
-      const { data, error } = await supabase
-        .from('appointments')
-        .select('start_time, end_time')
-        .eq('establishment_id', establishmentId)
-        .eq('status', 'scheduled')
-        .gte('start_time', startOfDay.toISOString())
-        .lte('end_time', endOfDay.toISOString());
-
-      if (error) throw error;
+      const response = await fetch(`http://localhost:3001/api/appointments?establishment_id=${establishmentId}&start=${startOfDay.toISOString()}&end=${endOfDay.toISOString()}`);
+      if (!response.ok) throw new Error('Erro ao buscar horários');
+      const data = await response.json();
       setAppointments(data || []);
     } catch (error) {
       console.error('Error loading appointments:', error);
@@ -159,35 +141,30 @@ export function BookingPage() {
       setError('Por favor, selecione um serviço e horário');
       return;
     }
-
     try {
       setSaving(true);
       setError(null);
-
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) {
-        // TODO: Implement login/signup flow
         setError('Você precisa estar logado para agendar');
         return;
       }
-
       const [hour, minute] = selectedTime.split(':').map(Number);
       const startTime = setMinutes(setHours(selectedDate, hour), minute);
       const endTime = addMinutes(startTime, selectedService.duration);
-
-      const { error: appointmentError } = await supabase
-        .from('appointments')
-        .insert({
-          client_id: user.id,
+      const response = await fetch('http://localhost:3001/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: user.uid,
           establishment_id: establishmentId,
           service_id: selectedService.id,
           start_time: startTime.toISOString(),
           end_time: endTime.toISOString(),
           status: 'scheduled'
-        });
-
-      if (appointmentError) throw appointmentError;
-
+        })
+      });
+      if (!response.ok) throw new Error('Erro ao agendar');
       alert('Agendamento realizado com sucesso!');
       navigate('/client/dashboard');
     } catch (error) {
