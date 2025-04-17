@@ -82,6 +82,10 @@ app.get('/api/barber_profiles/all', async (req, res) => {
 // GET barber profile by Firebase UID (protegida)
 app.get('/api/barber_profiles/:uid', jwtMiddleware, async (req, res) => {
   const { uid } = req.params;
+  // Só permite buscar o próprio perfil
+  if (req.user.uid !== uid) {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
   try {
     const { rows } = await pool.query('SELECT * FROM barber_profiles WHERE auth_uid = $1 LIMIT 1', [uid]);
     if (rows.length === 0) {
@@ -97,16 +101,18 @@ app.get('/api/barber_profiles/:uid', jwtMiddleware, async (req, res) => {
 
 // POST criar barbeiro (protegida)
 app.post('/api/barber_profiles', jwtMiddleware, async (req, res) => {
-  const { auth_uid, name, phone, bio, email } = req.body;
+  // Use o uid do JWT, não aceite do body!
+  const auth_uid = req.user.uid;
+  const { name, phone, bio, email, address } = req.body;
   if (!auth_uid || !name || !email) {
-    return res.status(400).json({ error: 'Campos obrigatórios: auth_uid, name, email' });
+    return res.status(400).json({ error: 'Campos obrigatórios: name, email' });
   }
   try {
     // Gera um UUID para o novo barbeiro
     const id = uuidv4();
     const { rows } = await pool.query(
       'INSERT INTO barber_profiles (id, auth_uid, name, phone, bio, email, address) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [id, auth_uid, name, phone || '', bio || '', email, '']
+      [id, auth_uid, name, phone || '', bio || '', email, address || '']
     );
     logToFile(`Barbeiro criado: ${auth_uid}`);
     res.status(201).json(rows[0]);

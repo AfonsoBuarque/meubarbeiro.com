@@ -4,7 +4,7 @@ const SCOPES = [
 ].join(' ');
 
 export async function getAuthUrl() {
-  const redirectUri = `${window.location.origin}/oauth2callback`;
+  const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin}/api/google/callback`;
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   const params = new URLSearchParams({
@@ -22,7 +22,7 @@ export async function getAuthUrl() {
 export async function handleOAuthCallback(code: string) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const clientSecret = import.meta.env.VITE_GOOGLE_CLIENT_SECRET;
-  const redirectUri = `${window.location.origin}/oauth2callback`;
+  const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin}/api/google/callback`;
 
   const params = new URLSearchParams({
     code,

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Lock, Mail, Scissors, User, Phone, MapPin } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../../lib/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -64,7 +64,7 @@ export function AuthForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  
+
   const { register: registerLogin, handleSubmit: handleSubmitLogin, formState: { errors: loginErrors, isSubmitting: isSubmittingLogin } } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema)
   });
@@ -120,7 +120,45 @@ export function AuthForm() {
     try {
       setLoading(true);
       setError(null);
-      // Implementar autenticação com Google usando Firebase Auth
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // 1. Obter UID do usuário autenticado
+      if (!user) throw new Error('Usuário não autenticado');
+      // 2. Login no backend para obter JWT
+      const loginRes = await fetch('http://localhost:3001/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid, email: user.email })
+      });
+      if (!loginRes.ok) throw new Error('Falha ao autenticar no backend');
+      const loginData = await loginRes.json();
+      // 3. Salvar token JWT no localStorage
+      localStorage.setItem('token', loginData.token);
+
+      // 4. Verifica se já existe perfil do barbeiro, senão cria um cadastro prévio
+      const profileRes = await fetch(`http://localhost:3001/api/barber_profiles/${user.uid}`, {
+        headers: { 'Authorization': `Bearer ${loginData.token}` }
+      });
+      if (profileRes.status === 404) {
+        // Cadastro prévio do perfil
+        await fetch('http://localhost:3001/api/barber_profiles', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${loginData.token}`
+          },
+          body: JSON.stringify({
+            uid: user.uid,
+            name: user.displayName || '',
+            email: user.email || '',
+            phone: user.phoneNumber || '',
+            address: ''
+          })
+        });
+      }
+      navigate('/barber/profile');
     } catch (error: any) {
       console.error('Google authentication error:', error);
       setError('Erro ao fazer login com Google');
