@@ -23,24 +23,24 @@ const establishmentSchema = z.object({
   state: z.string().length(2, 'Estado deve ter 2 caracteres'),
   zipcode: z.string().length(8, 'CEP deve ter 8 números'),
   workingHours: z.object({
-    monday: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
-    tuesday: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
-    wednesday: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
-    thursday: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
-    friday: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
-    saturday: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
-    sunday: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() })
+    Segunda: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
+    Terca: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
+    Quarta: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
+    Quinta: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
+    Sexta: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
+    Sabado: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
+    Domingo: z.object({ start: z.string(), end: z.string(), enabled: z.boolean() }),
   })
 });
 
 const defaultWorkingHours = {
-  monday: { start: '09:00', end: '18:00', enabled: true },
-  tuesday: { start: '09:00', end: '18:00', enabled: true },
-  wednesday: { start: '09:00', end: '18:00', enabled: true },
-  thursday: { start: '09:00', end: '18:00', enabled: true },
-  friday: { start: '09:00', end: '18:00', enabled: true },
-  saturday: { start: '09:00', end: '13:00', enabled: true },
-  sunday: { start: '09:00', end: '18:00', enabled: false }
+  Segunda: { start: '09:00', end: '18:00', enabled: true },
+  Terca: { start: '09:00', end: '18:00', enabled: true },
+  Quarta: { start: '09:00', end: '18:00', enabled: true },
+  Quinta: { start: '09:00', end: '18:00', enabled: true },
+  Sexta: { start: '09:00', end: '18:00', enabled: true },
+  Sabado: { start: '09:00', end: '13:00', enabled: true },
+  Domingo: { start: '09:00', end: '18:00', enabled: false },
 };
 
 type EstablishmentFormData = z.infer<typeof establishmentSchema>;
@@ -117,6 +117,8 @@ export function EstablishmentForm() {
 
   useEffect(() => {
     loadProfile();
+    fetchServices();
+    fetchBarbers();
     checkGoogleCalendarConnection();
   }, []);
 
@@ -144,57 +146,43 @@ export function EstablishmentForm() {
 
       if (establishmentData.error) {
         console.error('Error loading establishment:', establishmentData.error);
-        setError('Erro ao carregar dados do estabelecimento');
+        setError('Erro ao carregar estabelecimento');
+        setLoading(false);
         return;
       }
 
-      // Agora trata como objeto
-      if (establishmentData && !establishmentData.error) {
-        const establishment = establishmentData;
-        setEstablishmentId(establishment.id);
-        setValue('name', establishment.name);
-        setValue('phone', establishment.phone);
-        setValue('bio', establishment.bio || '');
-        setValue('street', establishment.address_details.street || '');
-        setValue('number', establishment.address_details.number || '');
-        setValue('complement', establishment.address_details.complement || '');
-        setValue('neighborhood', establishment.address_details.neighborhood || '');
-        setValue('city', establishment.address_details.city || '');
-        setValue('state', establishment.address_details.state || '');
-        setValue('zipcode', establishment.address_details.zipcode || '');
-        setValue('workingHours', establishment.working_hours || defaultWorkingHours);
-        setBannerImage(establishment.banner_url || null);
-        setProfileImage(establishment.profile_url || null);
-      } else {
-        // Se não encontrou estabelecimento, carregar dados do perfil antigo
-        const profileResponse = await fetch('http://localhost:3001/api/barber_profiles', {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const profile = await profileResponse.json();
+      // Garante todos os dias no workingHours
+      const normalizedWorkingHours = normalizeWorkingHours(establishmentData.working_hours);
 
-        if (profile) {
-          setValue('name', profile.name);
-          setValue('phone', profile.phone);
-          setValue('bio', profile.bio || '');
-          setValue('street', profile.address_details?.street || '');
-          setValue('number', profile.address_details?.number || '');
-          setValue('complement', profile.address_details?.complement || '');
-          setValue('neighborhood', profile.address_details?.neighborhood || '');
-          setValue('city', profile.address_details?.city || '');
-          setValue('state', profile.address_details?.state || '');
-          setValue('zipcode', profile.address_details?.zipcode || '');
-          setValue('workingHours', profile.working_hours || defaultWorkingHours);
-          setBannerImage(profile.banner_url || null);
-          setProfileImage(profile.profile_url || null);
-        }
-      }
+      setValue('name', establishmentData.name || '');
+      setValue('phone', establishmentData.phone || '');
+      setValue('bio', establishmentData.bio || '');
+      setValue('street', establishmentData.address_details?.street || '');
+      setValue('number', establishmentData.address_details?.number || '');
+      setValue('complement', establishmentData.address_details?.complement || '');
+      setValue('neighborhood', establishmentData.address_details?.neighborhood || '');
+      setValue('city', establishmentData.address_details?.city || '');
+      setValue('state', establishmentData.address_details?.state || '');
+      setValue('zipcode', establishmentData.address_details?.zipcode || '');
+      setValue('workingHours', normalizedWorkingHours);
+      setBannerImage(establishmentData.banner_url || null);
+      setProfileImage(establishmentData.profile_url || null);
     } catch (error) {
       console.error('Error loading profile:', error);
       setError('Erro ao carregar perfil');
     } finally {
       setLoading(false);
     }
+  }
+
+  // Função utilitária para garantir todos os dias no objeto workingHours
+  function normalizeWorkingHours(input: any) {
+    const days = ['Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo'];
+    const normalized: any = {};
+    days.forEach(day => {
+      normalized[day] = input && input[day] ? input[day] : { start: '09:00', end: day === 'Sabado' ? '13:00' : '18:00', enabled: day !== 'Domingo' };
+    });
+    return normalized;
   }
 
   async function checkGoogleCalendarConnection() {
@@ -797,39 +785,55 @@ export function EstablishmentForm() {
 
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Horário de Funcionamento</h3>
-              <div className="space-y-4">
-                {Object.entries(watch('workingHours')).map(([day, hours]) => (
-                  <div key={day} className="flex items-center space-x-4">
-                    <div className="w-32">
-                      <label className="inline-flex items-center">
+              {(() => {
+                // Só renderiza os dias definidos no schema, na ordem correta
+                const weekOrder = [
+                  'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo'
+                ];
+                const dayLabels: Record<string, string> = {
+                  Segunda: 'Segunda-feira',
+                  Terca: 'Terça-feira',
+                  Quarta: 'Quarta-feira',
+                  Quinta: 'Quinta-feira',
+                  Sexta: 'Sexta-feira',
+                  Sabado: 'Sábado',
+                  Domingo: 'Domingo',
+                };
+                const workingHours = watch('workingHours');
+                return weekOrder.map((day) => {
+                  const hours = workingHours[day];
+                  if (!hours) return null;
+                  return (
+                    <div key={day} className="flex items-center space-x-4">
+                      <label className="w-32 font-medium text-gray-700">{dayLabels[day]}</label>
+                      <input
+                        type="time"
+                        value={hours.start}
+                        onChange={e => setValue(`workingHours.${day}.start` as any, e.target.value)}
+                        className="rounded border-gray-300 px-2 py-1 w-24"
+                        disabled={!hours.enabled}
+                      />
+                      <span className="mx-2">até</span>
+                      <input
+                        type="time"
+                        value={hours.end}
+                        onChange={e => setValue(`workingHours.${day}.end` as any, e.target.value)}
+                        className="rounded border-gray-300 px-2 py-1 w-24"
+                        disabled={!hours.enabled}
+                      />
+                      <label className="flex items-center ml-4">
                         <input
                           type="checkbox"
-                          {...register(`workingHours.${day}.enabled` as any)}
-                          className="rounded border-gray-300 text-gray-900 shadow-sm focus:border-gray-500 focus:ring-gray-500"
+                          checked={hours.enabled}
+                          onChange={e => setValue(`workingHours.${day}.enabled` as any, e.target.checked)}
+                          className="mr-2"
                         />
-                        <span className="ml-2 text-sm font-medium text-gray-700">
-                          {day.charAt(0).toUpperCase() + day.slice(1)}
-                        </span>
+                        Ativo
                       </label>
                     </div>
-                    <div className="flex space-x-2 items-center">
-                      <input
-                        type="time"
-                        {...register(`workingHours.${day}.start` as any)}
-                        className="rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
-                        disabled={!watch(`workingHours.${day}.enabled`)}
-                      />
-                      <span className="text-gray-500">até</span>
-                      <input
-                        type="time"
-                        {...register(`workingHours.${day}.end` as any)}
-                        className="rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
-                        disabled={!watch(`workingHours.${day}.enabled`)}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  );
+                });
+              })()}
             </div>
 
             <div className="mt-10">
@@ -872,7 +876,7 @@ export function EstablishmentForm() {
                     ))}
                   </tbody>
                 </table>
-                {serviceLoading && <div className="text-center py-4"><svg className="animate-spin h-6 w-6 text-gray-500 mx-auto" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg></div>}
+                {serviceLoading && <div className="text-center py-4"><svg className="animate-spin h-6 w-6 text-gray-500 mx-auto" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S16.627 6 12 6z"></path></svg></div>}
               </div>
               {showServiceForm && (
                 <div className="bg-white rounded shadow-lg p-4 mt-4 max-w-md mx-auto">

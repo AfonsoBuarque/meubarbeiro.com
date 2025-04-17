@@ -438,6 +438,44 @@ app.get('/api/barber_employees', jwtMiddleware, async (req, res) => {
   }
 });
 
+const { google } = require('googleapis');
+require('dotenv').config();
+
+// Endpoint de callback do Google OAuth2 para Google Calendar
+app.get('/api/google/callback', async (req, res) => {
+  const code = req.query.code;
+  if (!code) {
+    return res.status(400).send('Code não fornecido');
+  }
+  // Configuração do OAuth2
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+  try {
+    // Troca o code pelos tokens
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+    // Recupera o usuário autenticado (exemplo: pelo JWT, cookie, etc)
+    // Aqui, espera-se que o frontend envie o token JWT na query ou header
+    const jwt = req.query.state || req.headers['authorization']?.replace('Bearer ', '');
+    if (!jwt) return res.status(401).send('Usuário não autenticado');
+    const decoded = require('jsonwebtoken').verify(jwt, process.env.JWT_SECRET);
+    const auth_uid = decoded.uid;
+    // Salva os tokens no banco (barber_profiles)
+    await pool.query(
+      'UPDATE barber_profiles SET google_access_token = $1, google_refresh_token = $2, google_calendar_connected = $3 WHERE auth_uid = $4',
+      [tokens.access_token, tokens.refresh_token, true, auth_uid]
+    );
+    // Redireciona para o frontend ou retorna sucesso
+    return res.redirect('/barber/establishment?google_calendar_connected=1');
+  } catch (err) {
+    logToFile(`Erro no callback do Google: ${err.stack || err}`, 'ERROR');
+    return res.status(500).send('Erro ao conectar com o Google Calendar');
+  }
+});
+
 app.listen(port, () => {
   logToFile(`Backend listening on http://localhost:${port}`);
   console.log(`Backend listening on http://localhost:${port}`);

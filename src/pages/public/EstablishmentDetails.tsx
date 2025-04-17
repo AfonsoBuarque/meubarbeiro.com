@@ -96,12 +96,41 @@ export default function EstablishmentDetails() {
         <div className="mb-8">
           <h3 className="text-xl font-semibold mb-2 flex items-center"><Clock className="h-5 w-5 mr-1" />Horário de Funcionamento</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {Object.entries(establishment.working_hours).map(([day, wh]) => (
-              <div key={day} className="bg-white rounded p-2 border flex items-center gap-2">
-                <span className="font-medium capitalize w-20">{day}</span>
-                {wh.enabled ? `${wh.start} - ${wh.end}` : <span className="text-gray-400">Fechado</span>}
-              </div>
-            ))}
+            {(() => {
+              const weekOrder = [
+                'Segunda', 'monday',
+                'Terca', 'tuesday',
+                'Quarta', 'wednesday',
+                'Quinta', 'thursday',
+                'Sexta', 'friday',
+                'Sabado', 'saturday',
+                'Domingo', 'sunday',
+              ];
+              const dayLabels: Record<string, string> = {
+                Segunda: 'Segunda-feira',
+                monday: 'Segunda-feira',
+                Terca: 'Terça-feira',
+                tuesday: 'Terça-feira',
+                Quarta: 'Quarta-feira',
+                wednesday: 'Quarta-feira',
+                Quinta: 'Quinta-feira',
+                thursday: 'Quinta-feira',
+                Sexta: 'Sexta-feira',
+                friday: 'Sexta-feira',
+                Sabado: 'Sábado',
+                saturday: 'Sábado',
+                Domingo: 'Domingo',
+                sunday: 'Domingo',
+              };
+              return Object.entries(establishment.working_hours)
+                .sort(([a], [b]) => weekOrder.indexOf(a) - weekOrder.indexOf(b))
+                .map(([day, wh]) => (
+                  <div key={day} className="bg-white rounded p-2 border flex items-center gap-2">
+                    <span className="font-medium w-24">{dayLabels[day] || day}</span>
+                    {wh.enabled ? `${wh.start} - ${wh.end}` : <span className="text-gray-400">Fechado</span>}
+                  </div>
+                ));
+            })()}
           </div>
         </div>
         {/* Serviços */}
