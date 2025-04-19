@@ -205,8 +205,23 @@ export function EstablishmentForm() {
 
   async function handleGoogleCalendarConnect() {
     try {
-      const authUrl = await getAuthUrl();
-      window.location.href = authUrl;
+      const token = localStorage.getItem('token');
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '381913685127-3k9htfrnndbuhmq5mut7eug63fptldqn.apps.googleusercontent.com';
+      const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'https://backaend-production.up.railway.app/api/google/callback';
+      const scope = [
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/calendar.events'
+      ].join(' ');
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope,
+        access_type: 'offline',
+        prompt: 'consent',
+        state: token || ''
+      });
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     } catch (error) {
       console.error('Error connecting to Google Calendar:', error);
       setError('Erro ao conectar com o Google Calendar');
