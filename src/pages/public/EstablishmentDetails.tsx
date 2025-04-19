@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2, MapPin, Clock, Scissors, ArrowLeft } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import BookingCalendar from '../../components/BookingCalendar';
+import BookingModal from '../../components/BookingModal';
 
 interface Service {
   id: string;
@@ -40,8 +42,12 @@ export default function EstablishmentDetails() {
   const navigate = useNavigate();
   const [establishment, setEstablishment] = useState<Establishment | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [barbers, setBarbers] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedBarberId, setSelectedBarberId] = useState<string>('');
 
   useEffect(() => {
     async function loadDetails() {
@@ -56,6 +62,18 @@ export default function EstablishmentDetails() {
         if (!servRes.ok) throw new Error('Erro ao buscar serviços');
         const servData = await servRes.json();
         setServices(servData.services || servData);
+        // Buscar barbeiros do estabelecimento usando o id correto
+        const establishmentId = estData.id || id;
+        const barbersRes = await fetch(`https://backaend-production.up.railway.app/api/barber_employees/${establishmentId}`);
+        if (barbersRes.ok) {
+          let barbersData = await barbersRes.json();
+          if (Array.isArray(barbersData)) {
+            barbersData = barbersData.map((b: any) => ({ id: b.id, name: b.name }));
+          } else if (barbersData.employees) {
+            barbersData = barbersData.employees.map((b: any) => ({ id: b.id, name: b.name }));
+          }
+          setBarbers(barbersData);
+        }
       } catch (e: any) {
         setError(e.message || 'Erro ao carregar dados');
       } finally {
@@ -64,6 +82,23 @@ export default function EstablishmentDetails() {
     }
     loadDetails();
   }, [id]);
+
+  // Função para gerar horários disponíveis conforme barbeiro e serviço
+  function getAvailableTimes() {
+    // Exemplo: 09:00 às 18:00, de acordo com working_hours do barbeiro (futuro)
+    // Por enquanto, retorna horários fixos
+    return Array.from({ length: 10 }, (_, i) => `${(9 + i).toString().padStart(2, '0')}:00`);
+  }
+
+  const handleDateClick = (date: Date) => {
+    setSelectedDate(date);
+    setModalOpen(true);
+  };
+
+  const handleBook = (data: { serviceId: string; date: string; time: string; barberId: string }) => {
+    // Aqui você pode fazer requisição ao backend para salvar o agendamento
+    alert(`Agendamento solicitado para o serviço ${data.serviceId} com barbeiro ${data.barberId} em ${data.date} às ${data.time}`);
+  };
 
   if (loading) return <div className="flex justify-center items-center h-96"><Loader2 className="animate-spin h-8 w-8 text-gray-900" /></div>;
   if (error) return <div className="text-center text-red-500 py-10">{error}</div>;
@@ -154,6 +189,30 @@ export default function EstablishmentDetails() {
               ))}
             </div>
           )}
+        </div>
+        {/* Calendário de agendamento */}
+        <div className="mb-8">
+          <h3 className="text-xl font-semibold mb-4">Agende um horário</h3>
+          <BookingCalendar
+            events={[]}
+            onDateClick={handleDateClick}
+            onEventClick={eventId => {
+              // Futuramente: abrir detalhes do agendamento
+              alert(`Evento/agendamento selecionado: ${eventId}`);
+            }}
+          />
+          <div className="text-xs text-gray-400 mt-2">Em breve: integração com Google Calendar</div>
+          <BookingModal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            selectedDate={selectedDate}
+            services={services}
+            barbers={barbers}
+            selectedBarberId={selectedBarberId}
+            onBarberChange={setSelectedBarberId}
+            getAvailableTimes={getAvailableTimes}
+            onBook={handleBook}
+          />
         </div>
         {/* Mapa - removido temporariamente */}
         {/* <div className="mb-8">
