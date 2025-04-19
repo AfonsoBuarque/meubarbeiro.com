@@ -25,7 +25,7 @@ export function FeaturedBarbers() {
       setError(null);
       
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/barber_profiles', {
+      const response = await fetch('https://backaend-production.up.railway.app/api/barber_profiles', {
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json'
@@ -106,7 +106,7 @@ export function FeaturedBarbers() {
               >
                 <div className="bg-white rounded-lg overflow-hidden shadow-xl">
                   <img
-                    src={barber.banner_url ? `http://localhost:3001${barber.banner_url}` : `https://source.unsplash.com/800x400/?barbershop,haircut&sig=${index}`}
+                    src={barber.banner_url ? `https://backaend-production.up.railway.app${barber.banner_url}` : `https://source.unsplash.com/800x400/?barbershop,haircut&sig=${index}`}
                     alt={barber.establishment_name || 'Estabelecimento sem nome'}
                     className="w-full h-64 object-cover"
                   />

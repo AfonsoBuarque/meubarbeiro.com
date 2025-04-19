@@ -83,7 +83,7 @@ export function AuthForm() {
       const user = auth.currentUser;
       if (!user) throw new Error('Usuário não autenticado');
       // 3. Login no backend para obter JWT
-      const loginRes = await fetch('http://localhost:3001/api/login', {
+      const loginRes = await fetch('https://backaend-production.up.railway.app/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uid: user.uid, email: user.email })
@@ -127,7 +127,7 @@ export function AuthForm() {
       // 1. Obter UID do usuário autenticado
       if (!user) throw new Error('Usuário não autenticado');
       // 2. Login no backend para obter JWT
-      const loginRes = await fetch('http://localhost:3001/api/login', {
+      const loginRes = await fetch('https://backaend-production.up.railway.app/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uid: user.uid, email: user.email })
@@ -138,12 +138,12 @@ export function AuthForm() {
       localStorage.setItem('token', loginData.token);
 
       // 4. Verifica se já existe perfil do barbeiro, senão cria um cadastro prévio
-      const profileRes = await fetch(`http://localhost:3001/api/barber_profiles/${user.uid}`, {
+      const profileRes = await fetch(`https://backaend-production.up.railway.app/api/barber_profiles/${user.uid}`, {
         headers: { 'Authorization': `Bearer ${loginData.token}` }
       });
       if (profileRes.status === 404) {
         // Cadastro prévio do perfil
-        await fetch('http://localhost:3001/api/barber_profiles', {
+        await fetch('https://backaend-production.up.railway.app/api/barber_profiles', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

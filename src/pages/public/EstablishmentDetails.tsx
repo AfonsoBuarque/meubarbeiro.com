@@ -48,11 +48,11 @@ export default function EstablishmentDetails() {
       setLoading(true);
       setError(null);
       try {
-        const estRes = await fetch(`http://localhost:3001/api/establishment_details/${id}`);
+        const estRes = await fetch(`https://backaend-production.up.railway.app/api/establishment_details/${id}`);
         if (!estRes.ok) throw new Error('Erro ao buscar estabelecimento');
         const estData = await estRes.json();
         setEstablishment(estData);
-        const servRes = await fetch(`http://localhost:3001/api/barber_services/${id}`);
+        const servRes = await fetch(`https://backaend-production.up.railway.app/api/barber_services/${id}`);
         if (!servRes.ok) throw new Error('Erro ao buscar serviços');
         const servData = await servRes.json();
         setServices(servData.services || servData);
@@ -82,8 +82,8 @@ export default function EstablishmentDetails() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Banner e perfil */}
         <div className="relative mb-8">
-          <img src={establishment.banner_url ? (establishment.banner_url.startsWith('/') ? `http://localhost:3001${establishment.banner_url}` : establishment.banner_url) : `https://source.unsplash.com/800x240/?barbershop,barber`} alt="Banner" className="w-full h-48 object-cover rounded-lg shadow" />
-          <img src={establishment.profile_url ? (establishment.profile_url.startsWith('/') ? `http://localhost:3001${establishment.profile_url}` : establishment.profile_url) : `https://source.unsplash.com/120x120/?barber-profile`} alt="Perfil" className="w-32 h-32 rounded-full border-4 border-white shadow-lg absolute left-6 -bottom-16 bg-white object-cover" />
+          <img src={establishment.banner_url ? (establishment.banner_url.startsWith('/') ? `https://backaend-production.up.railway.app${establishment.banner_url}` : establishment.banner_url) : `https://source.unsplash.com/800x240/?barbershop,barber`} alt="Banner" className="w-full h-48 object-cover rounded-lg shadow" />
+          <img src={establishment.profile_url ? (establishment.profile_url.startsWith('/') ? `https://backaend-production.up.railway.app${establishment.profile_url}` : establishment.profile_url) : `https://source.unsplash.com/120x120/?barber-profile`} alt="Perfil" className="w-32 h-32 rounded-full border-4 border-white shadow-lg absolute left-6 -bottom-16 bg-white object-cover" />
         </div>
         <div className="mt-20 mb-8">
           <h2 className="text-3xl font-bold mb-2">{establishment.name}</h2>

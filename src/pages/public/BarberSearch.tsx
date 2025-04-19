@@ -61,7 +61,7 @@ export function BarberSearch() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/barber_profiles', {
+      const response = await fetch('https://backaend-production.up.railway.app/api/barber_profiles', {
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           'Content-Type': 'application/json'
@@ -173,7 +173,7 @@ export function BarberSearch() {
             {barbers.map((barber) => (
               <Link to={`/establishment/${barber.id}`} key={barber.id} className="block bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
                 <img
-                  src={barber.profile_url ? (barber.profile_url.startsWith('/') ? `http://localhost:3001${barber.profile_url}` : barber.profile_url) : `https://source.unsplash.com/480x360/?barber-profile&sig=${barber.id}`}
+                  src={barber.profile_url ? (barber.profile_url.startsWith('/') ? `https://backaend-production.up.railway.app${barber.profile_url}` : barber.profile_url) : `https://source.unsplash.com/480x360/?barber-profile&sig=${barber.id}`}
                   alt={barber.establishment_name || barber.name}
                   className="w-full h-48 object-cover"
                 />

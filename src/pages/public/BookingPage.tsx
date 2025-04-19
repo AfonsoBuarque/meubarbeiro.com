@@ -62,12 +62,12 @@ export function BookingPage() {
       setLoading(true);
       setError(null);
       // Buscar detalhes do estabelecimento
-      const responseEst = await fetch(`http://localhost:3001/api/establishment_details/${establishmentId}`);
+      const responseEst = await fetch(`https://backaend-production.up.railway.app/api/establishment_details/${establishmentId}`);
       if (!responseEst.ok) throw new Error('Erro ao buscar estabelecimento');
       const establishmentData = await responseEst.json();
       setEstablishment(establishmentData);
       // Buscar serviços
-      const responseServ = await fetch(`http://localhost:3001/api/services/${establishmentId}`);
+      const responseServ = await fetch(`https://backaend-production.up.railway.app/api/services/${establishmentId}`);
       if (!responseServ.ok) throw new Error('Erro ao buscar serviços');
       const servicesData = await responseServ.json();
       setServices(servicesData);
@@ -85,7 +85,7 @@ export function BookingPage() {
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(selectedDate);
       endOfDay.setHours(23, 59, 59, 999);
-      const response = await fetch(`http://localhost:3001/api/appointments?establishment_id=${establishmentId}&start=${startOfDay.toISOString()}&end=${endOfDay.toISOString()}`);
+      const response = await fetch(`https://backaend-production.up.railway.app/api/appointments?establishment_id=${establishmentId}&start=${startOfDay.toISOString()}&end=${endOfDay.toISOString()}`);
       if (!response.ok) throw new Error('Erro ao buscar horários');
       const data = await response.json();
       setAppointments(data || []);
@@ -152,7 +152,7 @@ export function BookingPage() {
       const [hour, minute] = selectedTime.split(':').map(Number);
       const startTime = setMinutes(setHours(selectedDate, hour), minute);
       const endTime = addMinutes(startTime, selectedService.duration);
-      const response = await fetch('http://localhost:3001/api/appointments', {
+      const response = await fetch('https://backaend-production.up.railway.app/api/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -135,7 +135,7 @@ export function EstablishmentForm() {
 
       // Primeiro, buscar os detalhes do estabelecimento
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/establishment_details', {
+      const response = await fetch('https://backaend-production.up.railway.app/api/establishment_details', {
         method: 'GET',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -190,7 +190,7 @@ export function EstablishmentForm() {
       const user = auth.currentUser;
       if (!user) return;
 
-      const response = await fetch('http://localhost:3001/api/barber_profiles', {
+      const response = await fetch('https://backaend-production.up.railway.app/api/barber_profiles', {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -242,7 +242,7 @@ export function EstablishmentForm() {
       formData.append('establishment_id', establishmentId);
 
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/upload_image', {
+      const response = await fetch('https://backaend-production.up.railway.app/api/upload_image', {
         method: 'POST',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -271,7 +271,7 @@ export function EstablishmentForm() {
       if (!user) throw new Error('Usuário não autenticado');
       // Substituir insert/update do Supabase por chamada ao backend Express
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/establishment_details', {
+      const response = await fetch('https://backaend-production.up.railway.app/api/establishment_details', {
         method: establishmentId ? 'PUT' : 'POST',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -303,13 +303,13 @@ export function EstablishmentForm() {
       // Buscar barber_id do usuário autenticado
       const token = localStorage.getItem('token');
       // Primeiro, buscar barber_id
-      const profileRes = await fetch('http://localhost:3001/api/establishment_details', {
+      const profileRes = await fetch('https://backaend-production.up.railway.app/api/establishment_details', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const profile = await profileRes.json();
       if (!profile.barber_id) throw new Error('Barber_id não encontrado');
       setBarberId(profile.barber_id);
-      const res = await fetch(`http://localhost:3001/api/barber_services/${profile.barber_id}`, {
+      const res = await fetch(`https://backaend-production.up.railway.app/api/barber_services/${profile.barber_id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -330,7 +330,7 @@ export function EstablishmentForm() {
       // Buscar barber_id do usuário autenticado
       let barber_id = serviceForm.id ? serviceForm.barber_id : undefined;
       if (!barber_id) {
-        const profileRes = await fetch('http://localhost:3001/api/establishment_details', {
+        const profileRes = await fetch('https://backaend-production.up.railway.app/api/establishment_details', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const profile = await profileRes.json();
@@ -338,8 +338,8 @@ export function EstablishmentForm() {
       }
       const method = serviceForm.id ? 'PUT' : 'POST';
       const url = serviceForm.id
-        ? `http://localhost:3001/api/barber_services/${serviceForm.id}`
-        : `http://localhost:3001/api/barber_services`;
+        ? `https://backaend-production.up.railway.app/api/barber_services/${serviceForm.id}`
+        : `https://backaend-production.up.railway.app/api/barber_services`;
       const body = {
         name: serviceForm.name,
         price: parseInt(serviceForm.price),
@@ -398,7 +398,7 @@ export function EstablishmentForm() {
     setServiceSuccess('');
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:3001/api/barber_services/${serviceToDelete.id}`, {
+      const res = await fetch(`https://backaend-production.up.railway.app/api/barber_services/${serviceToDelete.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -427,7 +427,7 @@ export function EstablishmentForm() {
     setBarberError(null);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:3001/api/barber_employees', {
+      const res = await fetch('https://backaend-production.up.railway.app/api/barber_employees', {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
       const data = await res.json();
@@ -464,7 +464,7 @@ export function EstablishmentForm() {
       if (barberForm.photo) {
         formData.append('photo', barberForm.photo);
       }
-      const response = await fetch('http://localhost:3001/api/barber_employees', {
+      const response = await fetch('https://backaend-production.up.railway.app/api/barber_employees', {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : undefined, // NÃO definir Content-Type!
         body: formData,
@@ -496,7 +496,7 @@ export function EstablishmentForm() {
     setBarberError(null);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/barber_profiles/${barber.id}`, {
+      const response = await fetch(`https://backaend-production.up.railway.app/api/barber_profiles/${barber.id}`, {
         method: 'DELETE',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
@@ -567,7 +567,7 @@ export function EstablishmentForm() {
               {bannerImage ? (
                 <div className="w-full relative">
                   <img
-                    src={bannerImage ? `http://localhost:3001${bannerImage}` : undefined}
+                    src={bannerImage ? `https://backaend-production.up.railway.app${bannerImage}` : undefined}
                     alt="Banner"
                     className="w-full h-48 object-cover rounded-lg"
                   />
@@ -617,7 +617,7 @@ export function EstablishmentForm() {
               {profileImage ? (
                 <div className="relative">
                   <img
-                    src={profileImage ? `http://localhost:3001${profileImage}` : undefined}
+                    src={profileImage ? `https://backaend-production.up.railway.app${profileImage}` : undefined}
                     alt="Profile"
                     className="w-32 h-32 object-cover rounded-full"
                   />

@@ -61,7 +61,7 @@ export function BarberProfile() {
         if (!user) throw new Error('Usuário não autenticado');
         // Buscar perfil do barbeiro pelo backend Express
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:3001/api/barber_profiles/${user.uid}`, {
+        const response = await fetch(`https://backaend-production.up.railway.app/api/barber_profiles/${user.uid}`, {
           headers: {
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             'Content-Type': 'application/json'
@@ -100,7 +100,7 @@ export function BarberProfile() {
       }
       // Tenta atualizar primeiro
       const token = localStorage.getItem('token');
-      let response = await fetch(`http://localhost:3001/api/barber_profiles/${user.uid}`, {
+      let response = await fetch(`https://backaend-production.up.railway.app/api/barber_profiles/${user.uid}`, {
         method: 'PUT',
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -114,7 +114,7 @@ export function BarberProfile() {
       });
       // Se não existir, cria
       if (response.status === 404) {
-        response = await fetch('http://localhost:3001/api/barber_profiles', {
+        response = await fetch('https://backaend-production.up.railway.app/api/barber_profiles', {
           method: 'POST',
           headers: {
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
